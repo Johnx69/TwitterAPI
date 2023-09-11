@@ -1,4 +1,6 @@
+import { wrapAsync } from './../utils/handlers';
 import { Router } from 'express'
+
 import { loginValidator, registerValidator } from '~/middlewares/users.middlewares'
 import { loginController, registerController } from '~/controllers/users.controllers'
 const usersRouter = Router()
@@ -11,5 +13,5 @@ usersRouter.post('/login', loginValidator, loginController)
  * Body: {name: string, email: string, password: string, confirm_password: string, date_of_birth: ISO8601}
  *
  */
-usersRouter.post('/register', registerValidator, registerController)
+usersRouter.post('/register', registerValidator, wrapAsync(registerController))
 export default usersRouter
