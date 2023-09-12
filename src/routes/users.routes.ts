@@ -1,4 +1,4 @@
-import { wrapAsync } from './../utils/handlers';
+import { wrapAsync } from './../utils/handlers'
 import { Router } from 'express'
 
 import { loginValidator, registerValidator } from '~/middlewares/users.middlewares'
