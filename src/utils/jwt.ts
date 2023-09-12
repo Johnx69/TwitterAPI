@@ -1,5 +1,7 @@
-import { error } from 'console'
 import jwt, { SignOptions } from 'jsonwebtoken'
+import { config } from 'dotenv'
+import { TokenPayLoad } from '~/models/requests/User.requests'
+config()
 export const signToken = ({
   payload,
   privateKey = process.env.JWT_SECRET as string,
@@ -17,6 +19,23 @@ export const signToken = ({
         throw reject(error)
       }
       resolve(token as string)
+    })
+  })
+}
+
+export const verifyToken = ({
+  token,
+  secretOrPublicKey = process.env.JWT_SECRET as string
+}: {
+  token: string
+  secretOrPublicKey?: string
+}) => {
+  return new Promise<TokenPayLoad>((resolve, reject) => {
+    jwt.verify(token, secretOrPublicKey, (error, decoded) => {
+      if (error) {
+        throw reject(error)
+      }
+      resolve(decoded as TokenPayLoad)
     })
   })
 }

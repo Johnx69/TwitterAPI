@@ -1,7 +1,7 @@
-import { NextFunction, Request, Response } from 'express-serve-static-core'
+import { Request, Response, NextFunction, RequestHandler } from 'express'
 
-export const wrapAsync = (func: any) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+export const wrapRequestHandler = <P>(func: RequestHandler<P, any, any, any>) => {
+  return async (req: Request<P>, res: Response, next: NextFunction) => {
     try {
       await func(req, res, next)
     } catch (error) {
