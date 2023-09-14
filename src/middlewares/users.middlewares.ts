@@ -11,6 +11,9 @@ import HTTP_STATUS from '~/constants/httpStatus'
 import { JsonWebTokenError } from 'jsonwebtoken'
 import { Request } from 'express'
 // import { TokenPayload } from '~/models/requests/User.requests'
+import { config } from 'dotenv'
+import { envConfig } from '~/constants/config'
+config()
 
 const passwordSchema: ParamSchema = {
   notEmpty: {
@@ -243,9 +246,8 @@ export const emailVerifyTokenValidator = validate(
             try {
               const decoded_email_verify_token = await verifyToken({
                 token: value,
-                secretOrPublicKey: process.env.JWT_SECRET_EMAIL_VERIFY_TOKEN
+                secretOrPublicKey: envConfig.jwtSecretEmailVerifyToken
               })
-
               ;(req as Request).decoded_email_verify_token = decoded_email_verify_token
             } catch (error) {
               throw new ErrorWithStatus({
@@ -254,6 +256,32 @@ export const emailVerifyTokenValidator = validate(
               })
             }
 
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const forgotPasswordValidator = validate(
+  checkSchema(
+    {
+      email: {
+        isEmail: {
+          errorMessage: USERS_MESSAGES.EMAIL_IS_INVALID
+        },
+        trim: true,
+        custom: {
+          options: async (value, { req }) => {
+            const user = await databaseService.users.findOne({
+              email: value
+            })
+            if (user === null) {
+              throw new Error(USERS_MESSAGES.USER_NOT_FOUND)
+            }
+            req.user = user
             return true
           }
         }
