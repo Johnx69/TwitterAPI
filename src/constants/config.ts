@@ -2,7 +2,7 @@ import { config } from 'dotenv'
 import fs from 'fs'
 import path from 'path'
 const env = process.env.NODE_ENV
-const envFilename = `.env.${env}`
+const envFilename = `.env`
 // if (!env) {
 //   console.log(`Bạn chưa cung cấp biến môi trường NODE_ENV (ví dụ: development, production)`)
 //   console.log(`Phát hiện NODE_ENV = ${env}`)
@@ -15,9 +15,9 @@ const envFilename = `.env.${env}`
 //   console.log(`Vui lòng tạo file ${envFilename} và tham khảo nội dung ở file .env.example`)
 //   process.exit(1)
 // }
-// config({
-//   path: envFilename
-// })
+config({
+  path: envFilename
+})
 // export const isProduction = env === 'production'
 
 export const envConfig = {
