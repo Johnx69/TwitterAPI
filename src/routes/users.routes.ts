@@ -1,4 +1,10 @@
-import { followValidator, updateMeValidator, verifiedUserValidator } from './../middlewares/users.middlewares'
+import {
+  changePasswordValidator,
+  followValidator,
+  unfollowValidator,
+  updateMeValidator,
+  verifiedUserValidator
+} from './../middlewares/users.middlewares'
 import { wrapRequestHandler } from './../utils/handlers'
 import { Router } from 'express'
 
@@ -13,6 +19,7 @@ import {
   resetPasswordValidator
 } from '~/middlewares/users.middlewares'
 import {
+  changePasswordController,
   followController,
   forgotPasswordController,
   getMeController,
@@ -22,6 +29,7 @@ import {
   registerController,
   resendVerifyEmailController,
   resetPasswordController,
+  unfollowController,
   updateMeController,
   verifyEmailController,
   verifyForgotPasswordController
@@ -66,6 +74,22 @@ usersRouter.post(
   verifiedUserValidator,
   followValidator,
   wrapRequestHandler(followController)
+)
+
+usersRouter.delete(
+  '/follow/:user_id',
+  accessTokenValidator,
+  verifiedUserValidator,
+  unfollowValidator,
+  wrapRequestHandler(unfollowController)
+)
+
+usersRouter.put(
+  '/chang-password',
+  accessTokenValidator,
+  verifiedUserValidator,
+  changePasswordValidator,
+  wrapRequestHandler(changePasswordController)
 )
 
 export default usersRouter
