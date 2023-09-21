@@ -8,10 +8,15 @@ import { initFolder } from './utils/file'
 import { UPLOAD_IMAGE_DIR, UPLOAD_VIDEO_DIR } from './constants/dir'
 import path from 'path'
 import staticRouter from './routes/static.routes'
+import cors from 'cors'
 const app = express()
 const port = process.env.PORT
 // respond with "hello world" when a GET request is made to the homepage
-databaseService.connect()
+databaseService.connect().then(() => {
+  databaseService.indexUsers()
+  databaseService.indexRefreshTokens()
+  databaseService.indexFollowers()
+})
 
 // Create upload folder
 initFolder()
@@ -24,6 +29,7 @@ app.use('/static', staticRouter)
 app.use('/static/video', express.static(UPLOAD_VIDEO_DIR))
 
 app.use(defaultErrorHandler)
+app.use(cors())
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(400).json({ error: err.message })
