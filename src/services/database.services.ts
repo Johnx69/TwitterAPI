@@ -5,6 +5,9 @@ import User from '~/models/schemas/User.schema'
 import RefreshToken from '~/models/schemas/RefreshToken.schema'
 import { envConfig } from '~/constants/config'
 import Follower from '~/models/schemas/Follower.schema'
+import Tweet from '~/models/schemas/Tweet.schema'
+import Hashtag from '~/models/schemas/Hashtag.schema'
+import Bookmark from '~/models/schemas/Bookmark.schema'
 
 require('dotenv').config()
 
@@ -70,6 +73,16 @@ class DatabaseService {
   }
   get followers(): Collection<Follower> {
     return this.db.collection(envConfig.dbFollowersCollection)
+  }
+
+  get tweets(): Collection<Tweet> {
+    return this.db.collection(envConfig.dbTweetsCollection)
+  }
+  get hashtags(): Collection<Hashtag> {
+    return this.db.collection(envConfig.dbHashtagsCollection)
+  }
+  get bookmarks(): Collection<Bookmark> {
+    return this.db.collection(envConfig.dbBookmarksCollection)
   }
 }
 

@@ -1,23 +1,21 @@
-import { validate } from '~/utils/validation'
-import { ParamSchema, check, checkSchema } from 'express-validator'
-import usersService from '~/services/users.services'
+import { Request, Response, NextFunction } from 'express'
+import { ParamSchema, checkSchema } from 'express-validator'
+import { JsonWebTokenError } from 'jsonwebtoken'
+import HTTP_STATUS from '~/constants/httpStatus'
 import { USERS_MESSAGES } from '~/constants/messages'
+import { ErrorWithStatus } from '~/models/Errors'
 import databaseService from '~/services/database.services'
+import usersService from '~/services/users.services'
 import { hashPassword } from '~/utils/crypto'
 import { verifyToken } from '~/utils/jwt'
-import { ErrorWithStatus } from '~/models/Errors'
-import HTTP_STATUS from '~/constants/httpStatus'
-import { JsonWebTokenError } from 'jsonwebtoken'
-import { Request } from 'express'
-// import { TokenPayload } from '~/models/requests/User.requests'
-import { config } from 'dotenv'
-import { envConfig } from '~/constants/config'
+import { validate } from '~/utils/validation'
+import { capitalize } from 'lodash'
 import { ObjectId } from 'mongodb'
-import { NextFunction, Response } from 'express-serve-static-core'
 import { TokenPayload } from '~/models/requests/User.requests'
 import { UserVerifyStatus } from '~/constants/enums'
 import { REGEX_USERNAME } from '~/constants/regex'
-config()
+import { verifyAccessToken } from '~/utils/commons'
+import { envConfig } from '~/constants/config'
 
 const passwordSchema: ParamSchema = {
   notEmpty: {
@@ -112,7 +110,7 @@ const forgotPasswordTokenSchema: ParamSchema = {
       } catch (error) {
         if (error instanceof JsonWebTokenError) {
           throw new ErrorWithStatus({
-            message: error.message,
+            message: capitalize(error.message),
             status: HTTP_STATUS.UNAUTHORIZED
           })
         }
@@ -184,7 +182,6 @@ const userIdSchema: ParamSchema = {
     }
   }
 }
-
 export const loginValidator = validate(
   checkSchema(
     {
@@ -207,11 +204,36 @@ export const loginValidator = validate(
           }
         }
       },
-      password: passwordSchema
+      password: {
+        notEmpty: {
+          errorMessage: USERS_MESSAGES.PASSWORD_IS_REQUIRED
+        },
+        isString: {
+          errorMessage: USERS_MESSAGES.PASSWORD_MUST_BE_A_STRING
+        },
+        isLength: {
+          options: {
+            min: 6,
+            max: 50
+          },
+          errorMessage: USERS_MESSAGES.PASSWORD_LENGTH_MUST_BE_FROM_6_TO_50
+        },
+        isStrongPassword: {
+          options: {
+            minLength: 6,
+            minLowercase: 1,
+            minUppercase: 1,
+            minNumbers: 1,
+            minSymbols: 1
+          },
+          errorMessage: USERS_MESSAGES.PASSWORD_MUST_BE_STRONG
+        }
+      }
     },
     ['body']
   )
 )
+
 export const registerValidator = validate(
   checkSchema(
     {
@@ -246,25 +268,7 @@ export const accessTokenValidator = validate(
         custom: {
           options: async (value: string, { req }) => {
             const access_token = (value || '').split(' ')[1]
-            if (!access_token) {
-              throw new ErrorWithStatus({
-                message: USERS_MESSAGES.ACCESS_TOKEN_IS_REQUIRED,
-                status: HTTP_STATUS.UNAUTHORIZED
-              })
-            }
-            try {
-              const decoded_authorization = await verifyToken({
-                token: access_token,
-                secretOrPublicKey: process.env.JWT_SECRET_ACCESS_TOKEN as string
-              })
-              ;(req as Request).decoded_authorization = decoded_authorization
-            } catch (error) {
-              throw new ErrorWithStatus({
-                message: (error as JsonWebTokenError).message,
-                status: HTTP_STATUS.UNAUTHORIZED
-              })
-            }
-            return true
+            return await verifyAccessToken(access_token, req as Request)
           }
         }
       }
@@ -274,43 +278,46 @@ export const accessTokenValidator = validate(
 )
 
 export const refreshTokenValidator = validate(
-  checkSchema({
-    refresh_token: {
-      trim: true,
-      custom: {
-        options: async (value: string, { req }) => {
-          if (!value) {
-            throw new ErrorWithStatus({
-              message: USERS_MESSAGES.REFRESH_TOKEN_IS_REQUIRED,
-              status: HTTP_STATUS.UNAUTHORIZED
-            })
-          }
-          try {
-            const [decoded_refresh_token, refresh_token] = await Promise.all([
-              verifyToken({ token: value, secretOrPublicKey: process.env.JWT_SECRET_REFRESH_TOKEN as string }),
-              databaseService.refreshTokens.findOne({ token: value })
-            ])
-            if (refresh_token === null) {
+  checkSchema(
+    {
+      refresh_token: {
+        trim: true,
+        custom: {
+          options: async (value: string, { req }) => {
+            if (!value) {
               throw new ErrorWithStatus({
-                message: USERS_MESSAGES.USED_REFRESH_TOKEN_OR_NOT_EXIST,
+                message: USERS_MESSAGES.REFRESH_TOKEN_IS_REQUIRED,
                 status: HTTP_STATUS.UNAUTHORIZED
               })
             }
-            ;(req as Request).decoded_refresh_token = decoded_refresh_token
-          } catch (error) {
-            if (error instanceof JsonWebTokenError) {
-              throw new ErrorWithStatus({
-                message: error.message,
-                status: HTTP_STATUS.UNAUTHORIZED
-              })
+            try {
+              const [decoded_refresh_token, refresh_token] = await Promise.all([
+                verifyToken({ token: value, secretOrPublicKey: envConfig.jwtSecretRefreshToken }),
+                databaseService.refreshTokens.findOne({ token: value })
+              ])
+              if (refresh_token === null) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USED_REFRESH_TOKEN_OR_NOT_EXIST,
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              ;(req as Request).decoded_refresh_token = decoded_refresh_token
+            } catch (error) {
+              if (error instanceof JsonWebTokenError) {
+                throw new ErrorWithStatus({
+                  message: capitalize(error.message),
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              throw error
             }
-            throw error
+            return true
           }
-          return true
         }
       }
-    }
-  })
+    },
+    ['body']
+  )
 )
 
 export const emailVerifyTokenValidator = validate(
@@ -331,10 +338,11 @@ export const emailVerifyTokenValidator = validate(
                 token: value,
                 secretOrPublicKey: envConfig.jwtSecretEmailVerifyToken
               })
+
               ;(req as Request).decoded_email_verify_token = decoded_email_verify_token
             } catch (error) {
               throw new ErrorWithStatus({
-                message: (error as JsonWebTokenError).message,
+                message: capitalize((error as JsonWebTokenError).message),
                 status: HTTP_STATUS.UNAUTHORIZED
               })
             }
@@ -406,7 +414,6 @@ export const verifiedUserValidator = (req: Request, res: Response, next: NextFun
   }
   next()
 }
-
 export const updateMeValidator = validate(
   checkSchema(
     {
@@ -473,6 +480,8 @@ export const updateMeValidator = validate(
               throw Error(USERS_MESSAGES.USERNAME_INVALID)
             }
             const user = await databaseService.users.findOne({ username: value })
+            // Nếu đã tồn tại username này trong db
+            // thì chúng ta không cho phép update
             if (user) {
               throw Error(USERS_MESSAGES.USERNAME_EXISTED)
             }
@@ -495,10 +504,22 @@ export const followValidator = validate(
   )
 )
 
+export const getConversationsValidator = validate(
+  checkSchema(
+    {
+      receiver_id: userIdSchema
+    },
+    ['params']
+  )
+)
+
 export const unfollowValidator = validate(
-  checkSchema({
-    user_id: userIdSchema
-  })
+  checkSchema(
+    {
+      user_id: userIdSchema
+    },
+    ['params']
+  )
 )
 
 export const changePasswordValidator = validate(
@@ -530,3 +551,12 @@ export const changePasswordValidator = validate(
     confirm_new_password: confirmPasswordSchema
   })
 )
+
+export const isUserLoggedInValidator = (middleware: (req: Request, res: Response, next: NextFunction) => void) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.headers.authorization) {
+      return middleware(req, res, next)
+    }
+    next()
+  }
+}
