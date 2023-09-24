@@ -8,7 +8,6 @@ type ErrorsType = Record<
     [key: string]: any
   }
 >
-
 export class ErrorWithStatus {
   message: string
   status: number

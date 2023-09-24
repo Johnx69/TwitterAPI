@@ -1,6 +1,10 @@
-import { NextFunction, ParamsDictionary } from 'express-serve-static-core'
-import { Request, Response } from 'express'
-import usersService from '~/services/users.services'
+import { NextFunction, Request, Response } from 'express'
+import { ParamsDictionary } from 'express-serve-static-core'
+import { ObjectId } from 'mongodb'
+import { envConfig } from '~/constants/config'
+import { UserVerifyStatus } from '~/constants/enums'
+import HTTP_STATUS from '~/constants/httpStatus'
+import { USERS_MESSAGES } from '~/constants/messages'
 import {
   ChangePasswordReqBody,
   FollowReqBody,
@@ -17,13 +21,9 @@ import {
   VerifyEmailReqBody,
   VerifyForgotPasswordReqBody
 } from '~/models/requests/User.requests'
-import { ObjectId } from 'mongodb'
 import User from '~/models/schemas/User.schema'
 import databaseService from '~/services/database.services'
-import HTTP_STATUS from '~/constants/httpStatus'
-import { USERS_MESSAGES } from '~/constants/messages'
-import { UserVerifyStatus } from '~/constants/enums'
-import { envConfig } from '~/constants/config'
+import usersService from '~/services/users.services'
 
 export const loginController = async (req: Request<ParamsDictionary, any, LoginReqBody>, res: Response) => {
   const user = req.user as User
@@ -35,23 +35,23 @@ export const loginController = async (req: Request<ParamsDictionary, any, LoginR
   })
 }
 
-export const registerController = async (req: Request<ParamsDictionary, any, RegisterReqBody>, res: Response) => {
-  try {
-    const result = await usersService.register(req.body)
-    return res.json({
-      message: USERS_MESSAGES.REGISTER_SUCCESS,
-      result
-    })
-  } catch (error) {
-    console.log(error)
-  }
-}
-
-export const oauthController = async (req: Request, res: Response, next: NextFunction) => {
+export const oauthController = async (req: Request, res: Response) => {
   const { code } = req.query
   const result = await usersService.oauth(code as string)
   const urlRedirect = `${envConfig.clientRedirectCallback}?access_token=${result.access_token}&refresh_token=${result.refresh_token}&new_user=${result.newUser}&verify=${result.verify}`
   return res.redirect(urlRedirect)
+}
+
+export const registerController = async (
+  req: Request<ParamsDictionary, any, RegisterReqBody>,
+  res: Response,
+  next: NextFunction
+) => {
+  const result = await usersService.register(req.body)
+  return res.json({
+    message: USERS_MESSAGES.REGISTER_SUCCESS,
+    result
+  })
 }
 
 export const logoutController = async (req: Request<ParamsDictionary, any, LogoutReqBody>, res: Response) => {
@@ -106,17 +106,16 @@ export const resendVerifyEmailController = async (req: Request, res: Response, n
   const { user_id } = req.decoded_authorization as TokenPayload
   const user = await databaseService.users.findOne({ _id: new ObjectId(user_id) })
   if (!user) {
-    res.status(HTTP_STATUS.NOT_FOUND).json({
+    return res.status(HTTP_STATUS.NOT_FOUND).json({
       message: USERS_MESSAGES.USER_NOT_FOUND
     })
   }
-
   if (user.verify === UserVerifyStatus.Verified) {
     return res.json({
       message: USERS_MESSAGES.EMAIL_ALREADY_VERIFIED_BEFORE
     })
   }
-  const result = await usersService.resendVerifyEmail(user_id)
+  const result = await usersService.resendVerifyEmail(user_id, user.email)
   return res.json(result)
 }
 
@@ -125,8 +124,8 @@ export const forgotPasswordController = async (
   res: Response,
   next: NextFunction
 ) => {
-  const { _id, verify } = req.user as User
-  const result = await usersService.forgotPassword({ user_id: (_id as ObjectId).toString(), verify })
+  const { _id, verify, email } = req.user as User
+  const result = await usersService.forgotPassword({ user_id: (_id as ObjectId).toString(), verify, email })
   return res.json(result)
 }
 
@@ -160,6 +159,15 @@ export const getMeController = async (req: Request, res: Response, next: NextFun
   })
 }
 
+export const getProfileController = async (req: Request<GetProfileReqParams>, res: Response, next: NextFunction) => {
+  const { username } = req.params
+  const user = await usersService.getProfile(username)
+  return res.json({
+    message: USERS_MESSAGES.GET_PROFILE_SUCCESS,
+    result: user
+  })
+}
+
 export const updateMeController = async (
   req: Request<ParamsDictionary, any, UpdateMeReqBody>,
   res: Response,
@@ -170,15 +178,6 @@ export const updateMeController = async (
   const user = await usersService.updateMe(user_id, body)
   return res.json({
     message: USERS_MESSAGES.UPDATE_ME_SUCCESS,
-    result: user
-  })
-}
-
-export const getProfileController = async (req: Request<GetProfileReqParams>, res: Response, next: NextFunction) => {
-  const { username } = req.params
-  const user = await usersService.getProfile(username)
-  return res.json({
-    message: USERS_MESSAGES.GET_PROFILE_SUCCESS,
     result: user
   })
 }
